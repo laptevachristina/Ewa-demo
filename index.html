@@ -398,24 +398,19 @@ header .logo b{color:var(--ui-acc);font-weight:700}
 <!-- ffmpeg.wasm 0.12 (single-thread core — работает на GitHub Pages без COOP/COEP) -->
 <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
 <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
-<!-- gif.js — сборка GIF из предрендеренных кадров (для CapCut; без звука) -->
-<script src="https://unpkg.com/gif.js@0.2.0/dist/gif.js"></script>
+<!-- gifenc — современный GIF-энкодер с палитрой НА КАЖДЫЙ кадр (256 цветов per-frame),
+     картинка почти как видео, без ряби дизеринга. Локальный модуль — без CDN-зависимости. -->
+<script type="module">
+import { GIFEncoder, quantize, applyPalette } from './gifenc.mjs';
+window.gifenc = { GIFEncoder: GIFEncoder, quantize: quantize, applyPalette: applyPalette };
+window.dispatchEvent(new Event('gifenc-ready'));
+</script>
 <script>
-/* fallback загрузка gif.js + воркера: unpkg часто блокируется на телефонах/в регионах —
-   пробуем jsdelivr, затем cdnjs. ensureGifLib() проверяет и при необходимости догружает. */
-var GIF_LIB_URLS=['https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.js','https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js'];
-var GIF_WORKER_URL='gif.worker.js'; /* локальный воркер — раньше CDN блокировался и сборка падала на 1 медленный поток (висела минутами) */
-function ensureGifLib(){
+function ensureGifenc(){
   return new Promise(function(resolve){
-    if(window.GIF){resolve(true);return;}
-    function tryLoad(i){
-      if(i>=GIF_LIB_URLS.length){resolve(false);return;}
-      var s=document.createElement('script');s.src=GIF_LIB_URLS[i];
-      s.onload=function(){if(window.GIF)resolve(true);else tryLoad(i+1);};
-      s.onerror=function(){tryLoad(i+1);};
-      document.head.appendChild(s);
-    }
-    tryLoad(0);
+    if(window.gifenc){resolve(window.gifenc);return;}
+    window.addEventListener('gifenc-ready',function(){resolve(window.gifenc);},{once:true});
+    setTimeout(function(){resolve(window.gifenc||null);},8000);
   });
 }
 </script>
@@ -2102,22 +2097,40 @@ function exportVideo(format){
         }, function(){ setTimeout(tick,frameMs); });
       })();
       function assembleGif(frames){
-        ensureGifLib().then(function(ok){
-          if(!ok){gifResolve({blob:null,mime:'image/gif',err:'библиотека не загрузилась (нет сети/CDN заблокирован)'});return;}
+        ensureGifenc().then(function(G){
+          if(!G){gifResolve({blob:null,mime:'image/gif',err:'библиотека не загрузилась'});return;}
           if(!frames.length){gifResolve({blob:null,mime:'image/gif',err:'нет кадров'});return;}
           setFFStatus('сборка GIF… подожди, не закрывай');
-          /* 16 fps без прореживания. quality:1 — максимально точная палитра (без ряби дизеринга),
-             workers:4, локальный воркер. Длительность ≤4с → сборка уложится. */
-          var GW=frames[0].width,GH=frames[0].height;
-          var gif=new GIF({workers:4,quality:1,width:GW,height:GH,workerScript:GIF_WORKER_URL});
-          var delay=Math.round(1000/VIDEO_FPS); /* 16 fps воспроизведения */
-          frames.forEach(function(f){ if(f) try{gif.addFrame(f,{delay:delay});}catch(_){} });
-          gif.on('progress',function(p){ setFFStatus('сборка GIF '+Math.round(p*100)+'%'); });
-          /* watchdog 180с: на слабом телефоне сборка долгая, но кадры прорежены — уложится */
-          var gDone=false;
-          var watchdog=setTimeout(function(){ if(gDone)return; gDone=true; try{gif.abort();}catch(_){} gifResolve({blob:null,mime:'image/gif',err:'превышено время (180с)'}); },180000);
-          gif.on('finished',function(blob){ if(gDone)return; gDone=true; clearTimeout(watchdog); frames.length=0; prepared.forEach(function(p){p.res.frames.length=0;}); gifResolve({blob:blob,mime:'image/gif'}); });
-          gif.render();
+          /* gifenc: палитра НА КАЖДЫЙ кадр (256 цветов per-frame) → картинка почти как видео,
+             без ряби. Сборка чанками с yield между кадрами — UI не виснет, прогресс идёт. */
+          try{
+            var FW=frames[0].width,FH=frames[0].height;
+            var gif=G.GIFEncoder();
+            var delay=Math.round(1000/VIDEO_FPS); /* 16 fps воспроизведения */
+            var off=document.createElement('canvas');off.width=FW;off.height=FH;
+            var octx=off.getContext('2d',{willReadFrequently:true});
+            function yieldFrame(){return new Promise(function(r){setTimeout(r,0);});}
+            var gDone=false;
+            var watchdog=setTimeout(function(){gDone=true;gifResolve({blob:null,mime:'image/gif',err:'превышено время (180с)'});},180000);
+            (async function(){
+              for(var i=0;i<frames.length;i++){
+                if(gDone)return;
+                octx.clearRect(0,0,FW,FH);octx.drawImage(frames[i],0,0,FW,FH);
+                var data=octx.getImageData(0,0,FW,FH).data;
+                var palette=G.quantize(data,256,{format:'rgb565'});     /* per-frame палитра */
+                var index=G.applyPalette(data,palette,'rgb565');
+                gif.writeFrame(index,FW,FH,{palette:palette,delay:delay});
+                if(i%3===0)setFFStatus('сборка GIF '+Math.round(i/frames.length*100)+'%');
+                if(i%4===0)await yieldFrame();                          /* не виснем, даём UI обновиться */
+              }
+              if(gDone)return;
+              gif.finish();
+              var bytes=gif.bytes();
+              clearTimeout(watchdog);
+              frames.length=0;prepared.forEach(function(p){p.res.frames.length=0;});
+              gifResolve({blob:new Blob([bytes],{type:'image/gif'}),mime:'image/gif'});
+            })()['catch'](function(e){ if(!gDone){clearTimeout(watchdog);gifResolve({blob:null,mime:'image/gif',err:'ошибка: '+(e&&e.message||'?')});} });
+          }catch(e){gifResolve({blob:null,mime:'image/gif',err:'ошибка сборки: '+(e&&e.message||'?')});}
         });
       }
       var gifResolve; var gifDone=new Promise(function(r){gifResolve=r;});
