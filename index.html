@@ -404,7 +404,7 @@ header .logo b{color:var(--ui-acc);font-weight:700}
 /* fallback загрузка gif.js + воркера: unpkg часто блокируется на телефонах/в регионах —
    пробуем jsdelivr, затем cdnjs. ensureGifLib() проверяет и при необходимости догружает. */
 var GIF_LIB_URLS=['https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.js','https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js'];
-var GIF_WORKER_URL='https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js';
+var GIF_WORKER_URL='gif.worker.js'; /* локальный воркер — раньше CDN блокировался и сборка падала на 1 медленный поток (висела минутами) */
 function ensureGifLib(){
   return new Promise(function(resolve){
     if(window.GIF){resolve(true);return;}
@@ -2092,14 +2092,14 @@ function exportVideo(format){
         ensureGifLib().then(function(ok){
           if(!ok){gifResolve({blob:null,mime:'image/gif',err:'библиотека не загрузилась (нет сети/CDN заблокирован)'});return;}
           if(!frames.length){gifResolve({blob:null,mime:'image/gif',err:'нет кадров'});return;}
-          setFFStatus('сборка GIF…');
-          /* ускорение: берём каждый N-й кадр → ~26 кадров максимум (gif.js тормозит на кол-ве кадров). */
-          var stride=Math.max(1,Math.ceil(frames.length/26));
+          setFFStatus('сборка GIF… подожди, не закрывай');
+          /* ускорение: берём каждый N-й кадр → ~16 кадров максимум (gif.js тормозит на кол-ве кадров). */
+          var stride=Math.max(1,Math.ceil(frames.length/16));
           var sub=[];
           for(var i=0;i<frames.length;i+=stride){ if(frames[i])sub.push(frames[i]); }
           if(!sub.length)sub=[frames[0]];
           var GW=sub[0].width,GH=sub[0].height;
-          var gif=new GIF({workers:4,quality:30,width:GW,height:GH,workerScript:GIF_WORKER_URL});
+          var gif=new GIF({workers:4,quality:40,width:GW,height:GH,workerScript:GIF_WORKER_URL});
           var delay=Math.round(2*1000/VIDEO_FPS*stride); /* компенсируем stride — скорость воспроизведения та же */
           sub.forEach(function(f){ if(f) try{gif.addFrame(f,{delay:delay});}catch(_){} });
           gif.on('progress',function(p){ setFFStatus('сборка GIF '+Math.round(p*100)+'%'); });
