@@ -307,7 +307,7 @@ header .logo b{color:var(--ui-acc);font-weight:700}
       <button data-f="916">9:16</button>
     </div>
     <div class="grow"></div>
-    <button class="hbtn primary" id="exp-all">Скачать</button><button class="hbtn" id="exp-gif" title="Видео MP4">📷</button><button class="hbtn" id="exp-gif2" title="GIF для CapCut">🎞</button>
+    <button class="hbtn primary" id="exp-all">Скачать</button><button class="hbtn" id="exp-gif" title="Видео MP4">📷</button>
     <button class="hbtn primary" id="dlGrid" style="display:none">Скачать</button>
   </header>
 
@@ -398,22 +398,7 @@ header .logo b{color:var(--ui-acc);font-weight:700}
 <!-- ffmpeg.wasm 0.12 (single-thread core — работает на GitHub Pages без COOP/COEP) -->
 <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
 <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
-<!-- gifenc — современный GIF-энкодер с палитрой НА КАЖДЫЙ кадр (256 цветов per-frame),
-     картинка почти как видео, без ряби дизеринга. Локальный модуль — без CDN-зависимости. -->
-<script type="module">
-import { GIFEncoder, quantize, applyPalette } from './gifenc.mjs';
-window.gifenc = { GIFEncoder: GIFEncoder, quantize: quantize, applyPalette: applyPalette };
-window.dispatchEvent(new Event('gifenc-ready'));
-</script>
-<script>
-function ensureGifenc(){
-  return new Promise(function(resolve){
-    if(window.gifenc){resolve(window.gifenc);return;}
-    window.addEventListener('gifenc-ready',function(){resolve(window.gifenc);},{once:true});
-    setTimeout(function(){resolve(window.gifenc||null);},8000);
-  });
-}
-</script>
+<!-- GIF-экспорт убран — в приложении остаётся только MP4 -->
 
 <script>
 var BIRD_SVG="<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 130 100\" role=\"img\" aria-label=\"EWA PRODUCT\"><g fill=\"#0A0A0A\"><rect x=\"4\" y=\"20\" width=\"30\" height=\"9\" rx=\"2\"/><rect x=\"4\" y=\"40\" width=\"30\" height=\"9\" rx=\"2\"/><path d=\"M42 62 Q50 34 58 62 Q66 90 74 62\" fill=\"none\" stroke=\"#0A0A0A\" stroke-width=\"9\" stroke-linecap=\"round\"/><polygon points=\"92,66 108,30 124,66\"/></g></svg>";
@@ -2059,113 +2044,38 @@ function exportVideo(format){
         }).then(function(res){return {v:v,res:res};});
       })).then(function(prepared){
       var frameMs=1000/VIDEO_FPS;
-      var frames=[];
-      var gifMaxMs=(exportFormat==='gif')?Math.min(fullMs,4000):fullMs; /* GIF ≤4сек → ≤64 кадра на 16fps, сборка не затягивается */
       _recording=true;_ovCache=new Map(); /* кеш overlay — иначе SVG-decode каждый кадр вешает айфон */
-      if(exportFormat!=='gif'){ recorder.start(); } /* в GIF-режиме MediaRecorder не нужен — он мешает воркерам gif.js */
+      recorder.start();
       resumeClips(); /* клип играет muted — fallback на случай если предрендер не дал кадры (иначе чёрный экран на месте видео) */
-      setFFStatus(exportFormat==='gif'?'запись GIF…':'запись…');
+      setFFStatus('запись…');
       var t0=performance.now();
       (function tick(){
         var elapsed=performance.now()-t0;
-        if(elapsed>=gifMaxMs||elapsed>fullMs+8000){
+        if(elapsed>=fullMs||elapsed>fullMs+8000){
           try{clipEls.forEach(function(v){v.pause();});}catch(_){}
-          if(exportFormat==='gif'){ assembleGif(frames); }
-          else { try{recorder.stop();}catch(_){} }
+          try{recorder.stop();}catch(_){}
           return;
         }
-        showProgress(prepWeight+Math.min(1,elapsed/gifMaxMs)*(1-prepWeight));
+        showProgress(prepWeight+Math.min(1,elapsed/fullMs)*(1-prepWeight));
         var anim=animStateAt(items,elapsed,spinMode,typeSchedule); /* анимация текста/скролла/spin/pulse по времени */
         var vfm=new Map();
         prepared.forEach(function(p){ if(!p.res.frames.length)return; var idx=Math.floor((elapsed/1000)*p.res.fps)%p.res.frames.length; var bmp=p.res.frames[idx]; if(bmp)vfm.set(p.v,bmp); });
         withTimeout(renderSlideCanvas(el,anim,vfm),1200).then(function(canvas){
           rctx.clearRect(0,0,recCanvas.width,recCanvas.height);
           rctx.drawImage(canvas,0,0);
-          if(exportFormat==='gif'){
-            /* кадр берём КАЖДЫЙ tick (16 fps) — плавно «как видео». Даунскейл до 480px. Без дизеринга —
-               рябь убрана; вместо неё точная палитра (quality:1) в assembleGif — картинка чистая. */
-            try{
-              var gf=document.createElement('canvas'),gfw=640;
-              gf.width=gfw;gf.height=Math.round(gfw*(canvas.height/canvas.width));
-              gf.getContext('2d').drawImage(canvas,0,0,gf.width,gf.height);
-              frames.push(gf);
-            }catch(_){}
-          }
           var spent=performance.now()-t0;
           var next=Math.max(0, Math.round(frameMs-(spent%frameMs)));
           setTimeout(tick, next);
         }, function(){ setTimeout(tick,frameMs); });
       })();
-      function assembleGif(frames){
-        ensureGifenc().then(function(G){
-          if(!G){gifResolve({blob:null,mime:'image/gif',err:'библиотека не загрузилась'});return;}
-          if(!frames.length){gifResolve({blob:null,mime:'image/gif',err:'нет кадров'});return;}
-          setFFStatus('сборка GIF… подожди, не закрывай');
-          /* gifenc: палитра НА КАЖДЫЙ кадр (256 цветов per-frame) → картинка почти как видео,
-             без ряби. Сборка чанками с yield между кадрами — UI не виснет, прогресс идёт. */
-          try{
-            var FW=frames[0].width,FH=frames[0].height;
-            var gif=G.GIFEncoder();
-            var delay=Math.round(1000/VIDEO_FPS); /* 16 fps воспроизведения */
-            var off=document.createElement('canvas');off.width=FW;off.height=FH;
-            var octx=off.getContext('2d',{willReadFrequently:true});
-            /* Floyd–Steinberg dithering (error diffusion): чище, чем Bayer, на фото и градиентах.
-               Реализация через 2 прохода быстрого applyPalette + распространение ошибки O(N)
-               (настоящий FS с перебором палитры на каждый пиксель убил бы телефон). */
-            function yieldFrame(){return new Promise(function(r){setTimeout(r,0);});}
-            function fsDither(data,w,h,palette,G){
-              var idx0=G.applyPalette(data,palette,'rgb565');
-              var buf=new Float32Array(data.length);
-              for(var i=0;i<data.length;i++)buf[i]=data[i];
-              for(var y=0;y<h;y++){
-                for(var x=0;x<w;x++){
-                  var ci=idx0[y*w+x],p=(y*w+x)*4;
-                  var er=buf[p]-palette[ci][0],eg=buf[p+1]-palette[ci][1],eb=buf[p+2]-palette[ci][2];
-                  if(x+1<w){var q=p+4;buf[q]+=er*0.4375;buf[q+1]+=eg*0.4375;buf[q+2]+=eb*0.4375;}
-                  if(y+1<h){
-                    if(x>0){var q=((y+1)*w+(x-1))*4;buf[q]+=er*0.1875;buf[q+1]+=eg*0.1875;buf[q+2]+=eb*0.1875;}
-                    var q=((y+1)*w+x)*4;buf[q]+=er*0.3125;buf[q+1]+=eg*0.3125;buf[q+2]+=eb*0.3125;
-                    if(x+1<w){var q=((y+1)*w+(x+1))*4;buf[q]+=er*0.0625;buf[q+1]+=eg*0.0625;buf[q+2]+=eb*0.0625;}
-                  }
-                }
-              }
-              return G.applyPalette(buf,palette,'rgb565');
-            }
-            var gDone=false;
-            var watchdog=setTimeout(function(){gDone=true;gifResolve({blob:null,mime:'image/gif',err:'превышено время (180с)'});},180000);
-            (async function(){
-              for(var i=0;i<frames.length;i++){
-                if(gDone)return;
-                octx.clearRect(0,0,FW,FH);octx.drawImage(frames[i],0,0,FW,FH);
-                var data=octx.getImageData(0,0,FW,FH).data;
-                var palette=G.quantize(data,256,{format:'rgb565'});     /* per-frame палитра */
-                var index=fsDither(data,FW,FH,palette,G);               /* FS error-diffusion */
-                gif.writeFrame(index,FW,FH,{palette:palette,delay:delay});
-                if(i%3===0)setFFStatus('сборка GIF '+Math.round(i/frames.length*100)+'%');
-                if(i%4===0)await yieldFrame();                          /* не виснем, даём UI обновиться */
-              }
-              if(gDone)return;
-              gif.finish();
-              var bytes=gif.bytes();
-              clearTimeout(watchdog);
-              frames.length=0;prepared.forEach(function(p){p.res.frames.length=0;});
-              gifResolve({blob:new Blob([bytes],{type:'image/gif'}),mime:'image/gif'});
-            })()['catch'](function(e){ if(!gDone){clearTimeout(watchdog);gifResolve({blob:null,mime:'image/gif',err:'ошибка: '+(e&&e.message||'?')});} });
-          }catch(e){gifResolve({blob:null,mime:'image/gif',err:'ошибка сборки: '+(e&&e.message||'?')});}
-        });
-      }
-      var gifResolve; var gifDone=new Promise(function(r){gifResolve=r;});
-      if(exportFormat==='gif'){ return gifDone; }
       return stopped.then(function(blob){
         _recording=false;
-        frames.length=0; prepared.forEach(function(p){p.res.frames.length=0;});
+        prepared.forEach(function(p){p.res.frames.length=0;});
         return {blob:blob,mime:mime};
       });
     });
   }).then(function(res){
-    if(!res||!res.blob){ hideFFStatus(); videoExportBusy=false;btn.disabled=false;btn.textContent=oldText; alert('GIF не собрался'+(res&&res.err?(': '+res.err):'')+' — попробуй MP4, или напиши мне.'); return; }
-    /* GIF не требует ffmpeg — отдаём сразу */
-    if(res.mime==='image/gif'){ hideFFStatus(); videoExportBusy=false;btn.disabled=false;btn.textContent=oldText; openVideoModal(res.blob,res.mime); return; }
+    if(!res||!res.blob){ hideFFStatus(); videoExportBusy=false;btn.disabled=false;btn.textContent=oldText; alert('Не получилось собрать видео — напиши мне, поправим.'); return; }
     /* статус показываем отдельной плашкой сверху — кнопка-иконка узкая, текст в неё не влезает */
     /* сначала сервер (быстро: ~1 сек, есть звук), при сбое/оффлайне — локальный ffmpeg.wasm */
     showFFStatus('⏳ сервер…');
@@ -2186,8 +2096,7 @@ function exportVideo(format){
   });
 }
 if(gifBtn)gifBtn.addEventListener('click',function(){exportVideo('mp4');});
-var gifBtn2=document.getElementById('exp-gif2');
-if(gifBtn2)gifBtn2.addEventListener('click',function(){exportVideo('gif');});
+/* GIF-экспорт убран — остаётся только MP4 */
 function showFFStatus(t){var e=document.getElementById('ffStatus');if(!e){e=document.createElement('div');e.id='ffStatus';e.innerHTML='<span class="spin"></span><span class="fft"></span>';document.body.appendChild(e);}e.querySelector('.fft').textContent=t;e.style.display='flex';}
 function setFFStatus(t){var e=document.getElementById('ffStatus');if(e)e.querySelector('.fft').textContent=t;}
 function hideFFStatus(){var e=document.getElementById('ffStatus');if(e)e.style.display='none';}
@@ -2265,17 +2174,9 @@ function openVideoModal(blob,mime){
   var url=URL.createObjectURL(blob);
   var ext=extFor(mime);
   var top=document.createElement('button');top.className='hbtn primary';top.style.cssText='margin:0 auto 8px;display:block';
-  top.textContent=mime.indexOf('gif')>=0?'⬇ Скачать GIF':'⬇ Скачать видео';
+  top.textContent='⬇ Скачать видео';
   top.addEventListener('click',function(){var a=document.createElement('a');a.href=url;a.download='slide.'+ext;document.body.appendChild(a);a.click();a.remove();});
   imgs.appendChild(top);
-  if(mime.indexOf('gif')>=0){
-    /* GIF — превью картинкой (video его не проиграет) */
-    var im=document.createElement('img');im.src=url;im.style.maxHeight='68vh';im.style.maxWidth='92vw';im.style.borderRadius='8px';
-    var gw=document.createElement('div');gw.style.cssText='display:flex;flex-direction:column;gap:8px;align-items:center';
-    gw.appendChild(im);imgs.appendChild(gw);
-    document.getElementById('modal').classList.add('open');
-    return;
-  }
   var hint=document.createElement('div');hint.style.cssText='font-size:12px;line-height:1.4;color:var(--ui-mute,#888);text-align:center;max-width:300px;margin:0 auto 6px';
   hint.innerHTML='📱 На айфоне ролик падает в приложение «Загрузки». Открой его там → кнопка «Поделиться» → «Сохранить видео». Так он окажется в галерее.';
   imgs.appendChild(hint);
@@ -2352,7 +2253,7 @@ function setMode(m){
   document.querySelectorAll('#mode button').forEach(function(x){x.classList.toggle('on',x.dataset.m===m);});
   var deck=m==='deck';
   ['.stage','.controls','.hint'].forEach(function(sel){var el=document.querySelector(sel);if(el)el.style.display=deck?'':'none';});
-  ['fmt','undoBtn','redoBtn','exp-all','exp-gif','exp-gif2'].forEach(function(id){var el=document.getElementById(id);if(el)el.style.display=deck?'':'none';});var _dg=document.getElementById('dlGrid');if(_dg)_dg.style.display=deck?'none':'';
+  ['fmt','undoBtn','redoBtn','exp-all','exp-gif'].forEach(function(id){var el=document.getElementById(id);if(el)el.style.display=deck?'':'none';});var _dg=document.getElementById('dlGrid');if(_dg)_dg.style.display=deck?'none':'';
   var _af=document.getElementById('addFrameBtn');if(_af){if(!deck)_af.style.display='none';else updateCollageRow();}
   document.getElementById('planner').style.display=deck?'none':'flex';
   if(!deck)renderGrid();
