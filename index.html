@@ -2093,10 +2093,15 @@ function exportVideo(format){
           if(!ok){gifResolve({blob:null,mime:'image/gif',err:'библиотека не загрузилась (нет сети/CDN заблокирован)'});return;}
           if(!frames.length){gifResolve({blob:null,mime:'image/gif',err:'нет кадров'});return;}
           setFFStatus('сборка GIF…');
-          var GW=frames[0].width,GH=frames[0].height;
-          var gif=new GIF({workers:2,quality:20,width:GW,height:GH,workerScript:GIF_WORKER_URL});
-          var delay=Math.round(2*1000/VIDEO_FPS); /* ~125мс = 8 fps (кадры троттлятся в tick) */
-          frames.forEach(function(f){ if(f) try{gif.addFrame(f,{delay:delay});}catch(_){} });
+          /* ускорение: берём каждый N-й кадр → ~26 кадров максимум (gif.js тормозит на кол-ве кадров). */
+          var stride=Math.max(1,Math.ceil(frames.length/26));
+          var sub=[];
+          for(var i=0;i<frames.length;i+=stride){ if(frames[i])sub.push(frames[i]); }
+          if(!sub.length)sub=[frames[0]];
+          var GW=sub[0].width,GH=sub[0].height;
+          var gif=new GIF({workers:4,quality:30,width:GW,height:GH,workerScript:GIF_WORKER_URL});
+          var delay=Math.round(2*1000/VIDEO_FPS*stride); /* компенсируем stride — скорость воспроизведения та же */
+          sub.forEach(function(f){ if(f) try{gif.addFrame(f,{delay:delay});}catch(_){} });
           gif.on('progress',function(p){ setFFStatus('сборка GIF '+Math.round(p*100)+'%'); });
           /* watchdog 180с: на слабом телефоне сборка долгая, но кадры прорежены — уложится */
           var gDone=false;

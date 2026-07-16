@@ -179,8 +179,40 @@ def slide4():
     txt(d, (100, cy2+242), "· всё остальное — офлайн", font("semi", 27), GREY, anchor="la")
     save(img, "04_онлайн")
 
-# ================================================================ S5 ИТОГ
+# ================================================================ S5 ФОРМАТЫ
 def slide5():
+    img, d = new(PINK)
+    card_frame(d, MAGENTA)
+    d.rounded_rectangle([60, 60, 330, 120], radius=30*SS, fill=BLACK)
+    txt(d, (195, 90), "ФОРМАТЫ", font("black", 34), WHITE, anchor="mm")
+    txt(d, (60, 165), "Какой файл\nскачать", font("black", 68), BLACK, anchor="la", lsp=6)
+    txt(d, (60, 320), "две кнопки экспорта — под разные задачи", font("semi", 30), (90,90,90), anchor="la")
+
+    # MP4 карточка
+    cy = 410
+    d.rounded_rectangle([60, cy, W-60, cy+360], radius=36*SS, fill=WHITE)
+    d.rounded_rectangle([100, cy+50, 220, cy+170], radius=24*SS, fill=MAGENTA)
+    txt(d, (160, cy+110), "MP4", font("black", 52), WHITE, anchor="mm")
+    txt(d, (260, cy+45), "видео со звуком", font("black", 42), BLACK, anchor="la")
+    txt(d, (260, cy+103), "готово сразу — можно публиковать", font("semi", 29), GREY, anchor="la")
+    txt(d, (260, cy+143), "→ Инстаграм · Эдитс", font("semi", 28), MAGENTA, anchor="la")
+    txt(d, (100, cy+220), "для постов, сторис, рилс — туда напрямую,", font("semi", 29), (90,90,90), anchor="la")
+    txt(d, (100, cy+262), "без лишней обработки", font("semi", 29), (90,90,90), anchor="la")
+
+    # GIF карточка
+    cy2 = cy + 400
+    d.rounded_rectangle([60, cy2, W-60, cy2+360], radius=36*SS, fill=WHITE)
+    d.rounded_rectangle([100, cy2+50, 220, cy2+170], radius=24*SS, fill=BLACK)
+    txt(d, (160, cy2+110), "GIF", font("black", 52), WHITE, anchor="mm")
+    txt(d, (260, cy2+45), "без звука", font("black", 42), BLACK, anchor="la")
+    txt(d, (260, cy2+103), "заготовка для монтажа", font("semi", 29), GREY, anchor="la")
+    txt(d, (260, cy2+143), "→ CapCut", font("semi", 28), MAGENTA, anchor="la")
+    txt(d, (100, cy2+220), "закидываешь в CapCut и накладываешь", font("semi", 29), (90,90,90), anchor="la")
+    txt(d, (100, cy2+262), "свой звук/музыку сверху", font("semi", 29), (90,90,90), anchor="la")
+    save(img, "05_форматы")
+
+# ================================================================ S6 ИТОГ
+def slide6():
     img, d = new(BLACK)
     card_frame(d, MAGENTA)
     txt(d, (W//2, 240), "ИТОГ", font("black", 40), PINK, anchor="ma")
@@ -200,8 +232,8 @@ def slide5():
         txt(d, (bx+bw//2, by+105), n, font("black", 50), BLACK if col!=BLACK else WHITE, anchor="mm")
         txt(d, (bx+bw//2, by+260), t, font("semi", 32), WHITE, anchor="ma", lsp=6)
     txt(d, (W//2, 1180), "вопросы — пиши в поддержку", font("semi", 34), PINK, anchor="ma")
-    save(img, "05_итог")
+    save(img, "06_итог")
 
 if __name__ == "__main__":
-    slide1(); slide2(); slide3(); slide4(); slide5()
+    slide1(); slide2(); slide3(); slide4(); slide5(); slide6()
     print("готово:", OUT)
