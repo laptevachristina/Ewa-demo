@@ -1651,6 +1651,22 @@ document.getElementById('presets').addEventListener('click',function(e){
 function bgColorOf(el){var k=el.dataset.bg,c=COLORS.filter(function(x){return x.k===k;})[0];return c?c.c:'#FFFFFF';}
 function bgEntryOf(el){var k=el.dataset.bg;return COLORS.filter(function(x){return x.k===k;})[0]||COLORS[0];}
 function roundRectPath(ctx,x,y,w,h,r){r=Math.max(0,Math.min(r,w/2,h/2));ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+/* ordered dithering (Bayer 4x4) по canvas — убирает «плавающий пиксель-градиент» (banding)
+   на фоне: neuquant gif.js потом подбирает палитру чище, градиент выглядит гладко, не полосами. */
+var DITHER_B=[0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5];
+function ditherCanvas(c){
+  try{
+    var cx=c.getContext('2d'),im=cx.getImageData(0,0,c.width,c.height),d=im.data;
+    for(var y=0;y<c.height;y++){
+      for(var x=0;x<c.width;x++){
+        var i=(y*c.width+x)*4,t=(DITHER_B[(y&3)*4+(x&3)]-7.5)*16;
+        for(var k=0;k<3;k++){var v=d[i+k]+t;d[i+k]=v<0?0:(v>255?255:v);}
+      }
+    }
+    cx.putImageData(im,0,0);
+  }catch(e){}
+  return c;
+}
 /* keep first maxChars characters of visible text inside root, drop the rest (used for typewriter reveal) */
 function truncateVisibleText(root,maxChars,showCursor){
   var remaining=maxChars;
@@ -2049,20 +2065,20 @@ function exportVideo(format){
       })).then(function(prepared){
       var frameMs=1000/VIDEO_FPS;
       var frames=[];
-      var lastGifMs=-1e9; /* троттлинг кадров для GIF (~8 fps) */
+      var gifMaxMs=(exportFormat==='gif')?Math.min(fullMs,4000):fullMs; /* GIF ≤4сек → ≤64 кадра на 16fps, сборка не затягивается */
       _recording=true;_ovCache=new Map(); /* кеш overlay — иначе SVG-decode каждый кадр вешает айфон */
       if(exportFormat!=='gif'){ recorder.start(); } /* в GIF-режиме MediaRecorder не нужен — он мешает воркерам gif.js */
       setFFStatus(exportFormat==='gif'?'запись GIF…':'запись…');
       var t0=performance.now();
       (function tick(){
         var elapsed=performance.now()-t0;
-        if(elapsed>=fullMs||elapsed>fullMs+8000){
+        if(elapsed>=gifMaxMs||elapsed>fullMs+8000){
           try{clipEls.forEach(function(v){v.pause();});}catch(_){}
           if(exportFormat==='gif'){ assembleGif(frames); }
           else { try{recorder.stop();}catch(_){} }
           return;
         }
-        showProgress(prepWeight+Math.min(1,elapsed/fullMs)*(1-prepWeight));
+        showProgress(prepWeight+Math.min(1,elapsed/gifMaxMs)*(1-prepWeight));
         var anim=animStateAt(items,elapsed,spinMode,typeSchedule); /* анимация текста/скролла/spin/pulse по времени */
         var vfm=new Map();
         prepared.forEach(function(p){ if(!p.res.frames.length)return; var idx=Math.floor((elapsed/1000)*p.res.fps)%p.res.frames.length; var bmp=p.res.frames[idx]; if(bmp)vfm.set(p.v,bmp); });
@@ -2070,18 +2086,14 @@ function exportVideo(format){
           rctx.clearRect(0,0,recCanvas.width,recCanvas.height);
           rctx.drawImage(canvas,0,0);
           if(exportFormat==='gif'){
-            /* кадр берём РЕЖЕ — раз в 2*frameMs (~8 fps вместо 16): для текста/стикеров плавности
-               хватает, а кадров вдвое меньше → gif.js не кодится дольше минуты (было «превышено время»).
-               Даунскейл до 400px по ширине (было 480). */
-            if(elapsed-lastGifMs>=2*frameMs-2){
-              lastGifMs=elapsed;
-              try{
-                var gf=document.createElement('canvas'),gfw=480;
-                gf.width=gfw;gf.height=Math.round(gfw*(canvas.height/canvas.width));
-                gf.getContext('2d').drawImage(canvas,0,0,gf.width,gf.height);
-                frames.push(gf);
-              }catch(_){}
-            }
+            /* кадр берём КАЖДЫЙ tick (16 fps) — плавно «как видео». Даунскейл до 480px + дизеринг (убирает banding градиента). */
+            try{
+              var gf=document.createElement('canvas'),gfw=480;
+              gf.width=gfw;gf.height=Math.round(gfw*(canvas.height/canvas.width));
+              gf.getContext('2d').drawImage(canvas,0,0,gf.width,gf.height);
+              ditherCanvas(gf);
+              frames.push(gf);
+            }catch(_){}
           }
           var spent=performance.now()-t0;
           var next=Math.max(0, Math.round(frameMs-(spent%frameMs)));
@@ -2093,16 +2105,12 @@ function exportVideo(format){
           if(!ok){gifResolve({blob:null,mime:'image/gif',err:'библиотека не загрузилась (нет сети/CDN заблокирован)'});return;}
           if(!frames.length){gifResolve({blob:null,mime:'image/gif',err:'нет кадров'});return;}
           setFFStatus('сборка GIF… подожди, не закрывай');
-          /* ~24 кадра — плавность; локальный воркер + 4 потока держат скорость */
-          var stride=Math.max(1,Math.ceil(frames.length/24));
-          var sub=[];
-          for(var i=0;i<frames.length;i+=stride){ if(frames[i])sub.push(frames[i]); }
-          if(!sub.length)sub=[frames[0]];
-          var GW=sub[0].width,GH=sub[0].height;
-          /* quality:10 — максимум цветов (убирает «пиксели-градиент»/banding), было 40 */
-          var gif=new GIF({workers:4,quality:10,width:GW,height:GH,workerScript:GIF_WORKER_URL});
-          var delay=Math.round(2*1000/VIDEO_FPS*stride); /* компенсируем stride — скорость воспроизведения та же */
-          sub.forEach(function(f){ if(f) try{gif.addFrame(f,{delay:delay});}catch(_){} });
+          /* 16 fps без прореживания: кадры собраны каждый tick. quality:3 — точная палитра,
+             workers:4, локальный воркер. Дизеринг уже наложен на кадры → градиенты без banding. */
+          var GW=frames[0].width,GH=frames[0].height;
+          var gif=new GIF({workers:4,quality:3,width:GW,height:GH,workerScript:GIF_WORKER_URL});
+          var delay=Math.round(1000/VIDEO_FPS); /* 16 fps воспроизведения */
+          frames.forEach(function(f){ if(f) try{gif.addFrame(f,{delay:delay});}catch(_){} });
           gif.on('progress',function(p){ setFFStatus('сборка GIF '+Math.round(p*100)+'%'); });
           /* watchdog 180с: на слабом телефоне сборка долгая, но кадры прорежены — уложится */
           var gDone=false;
