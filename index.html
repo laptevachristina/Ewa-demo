@@ -2014,27 +2014,23 @@ function exportVideo(format){
     var prepWeight=clipEls.length?0.5:0;
     var prepFracs=clipEls.map(function(){return 0;});
     function showProgress(frac){btn.textContent='⏳ '+Math.round(Math.max(0,Math.min(1,frac))*100)+'%';}
-    /* предрендер кадров клипа УБРАН (вис на айфоне): видео рисуется напрямую из <video>
-         в момент записи (drawImage video element в renderSlideCanvas), звук — через Web Audio. */
-      return Promise.resolve([]).then(function(prepared){
+    /* видео-движок взят из рабочего приложения inmark: предрендер клипа + анимация по elapsed.
+       Предрендер чинит «видео замирает» (realtime-декод клипа на телефоне не успевал и вешал запись),
+       animStateAt чинит «нет пульсации/анимации» (v47 передавал anim=null, теперь считаем состояние
+       текст/скролл/spin/pulse по времени — как в inmark). Звука по-прежнему нет (демо-срез). */
+      return Promise.all(clipEls.map(function(v,idx){
+        var vc=v.closest('.vidclip');
+        var targetW=(vc?vc.offsetWidth:180)*ES,targetH=(vc?vc.offsetHeight:320)*ES;
+        return prerenderClipFrames(v,targetW,targetH,function(f){
+          prepFracs[idx]=f;
+          var avg=prepFracs.reduce(function(a,b){return a+b;},0)/prepFracs.length;
+          showProgress(avg*prepWeight);
+        }).then(function(res){return {v:v,res:res};});
+      })).then(function(prepared){
       var frameMs=1000/VIDEO_FPS;
-      var total=Math.max(1,Math.ceil(fullMs/frameMs));
-      var frames=[];
-      function withTimeout(promise,ms){
-        return new Promise(function(res,rej){
-          var settled=false;
-          var timer=setTimeout(function(){if(!settled){settled=true;rej(new Error('frame-timeout'));}},ms);
-          promise.then(function(v){if(!settled){settled=true;clearTimeout(timer);res(v);}},
-                       function(e){if(!settled){settled=true;clearTimeout(timer);rej(e);}});
-        });
-      }
-      /* REALTIME-запись (v47): кадры рендерятся и пишутся в момент, без предрендера всего слайда
-         (предрендер вис на айфоне). Кадры видео-кружка берём из prepared (они предрендерены отдельно, быстро).
-         Звук — через captureStream из видео-элемента (resumeClips). Сервер потом соберёт честный MP4. */
       var frames=[];
       _recording=true;_ovCache=new Map(); /* кеш overlay — иначе SVG-decode каждый кадр вешает айфон */
       recorder.start();
-      resumeClips();
       setFFStatus('запись…');
       var t0=performance.now();
       (function tick(){
@@ -2045,10 +2041,11 @@ function exportVideo(format){
           else { try{recorder.stop();}catch(_){} }
           return;
         }
-        var anim=null; /* статичный текст ради скорости; pulse кнопок восстановим в v49 */
+        showProgress(prepWeight+Math.min(1,elapsed/fullMs)*(1-prepWeight));
+        var anim=animStateAt(items,elapsed,spinMode,typeSchedule); /* анимация текста/скролла/spin/pulse по времени */
         var vfm=new Map();
         prepared.forEach(function(p){ if(!p.res.frames.length)return; var idx=Math.floor((elapsed/1000)*p.res.fps)%p.res.frames.length; var bmp=p.res.frames[idx]; if(bmp)vfm.set(p.v,bmp); });
-        withTimeout(renderSlideCanvas(el,anim,vfm),2500).then(function(canvas){
+        withTimeout(renderSlideCanvas(el,anim,vfm),1200).then(function(canvas){
           rctx.clearRect(0,0,recCanvas.width,recCanvas.height);
           rctx.drawImage(canvas,0,0);
           if(exportFormat==='gif'){ try{frames.push(canvas);}catch(_){} }
