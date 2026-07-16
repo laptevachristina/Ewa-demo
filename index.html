@@ -2068,6 +2068,7 @@ function exportVideo(format){
       var gifMaxMs=(exportFormat==='gif')?Math.min(fullMs,4000):fullMs; /* GIF ≤4сек → ≤64 кадра на 16fps, сборка не затягивается */
       _recording=true;_ovCache=new Map(); /* кеш overlay — иначе SVG-decode каждый кадр вешает айфон */
       if(exportFormat!=='gif'){ recorder.start(); } /* в GIF-режиме MediaRecorder не нужен — он мешает воркерам gif.js */
+      resumeClips(); /* клип играет muted — fallback на случай если предрендер не дал кадры (иначе чёрный экран на месте видео) */
       setFFStatus(exportFormat==='gif'?'запись GIF…':'запись…');
       var t0=performance.now();
       (function tick(){
