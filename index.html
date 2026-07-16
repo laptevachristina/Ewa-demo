@@ -2030,8 +2030,8 @@ function exportVideo(format){
       var frameMs=1000/VIDEO_FPS;
       var frames=[];
       _recording=true;_ovCache=new Map(); /* кеш overlay — иначе SVG-decode каждый кадр вешает айфон */
-      recorder.start();
-      setFFStatus('запись…');
+      if(exportFormat!=='gif'){ recorder.start(); } /* в GIF-режиме MediaRecorder не нужен — он мешает воркерам gif.js */
+      setFFStatus(exportFormat==='gif'?'запись GIF…':'запись…');
       var t0=performance.now();
       (function tick(){
         var elapsed=performance.now()-t0;
@@ -2048,7 +2048,16 @@ function exportVideo(format){
         withTimeout(renderSlideCanvas(el,anim,vfm),1200).then(function(canvas){
           rctx.clearRect(0,0,recCanvas.width,recCanvas.height);
           rctx.drawImage(canvas,0,0);
-          if(exportFormat==='gif'){ try{frames.push(canvas);}catch(_){} }
+          if(exportFormat==='gif'){
+            /* даунскейл кадра до 480px по ширине: gif.js на полноразмерных 1080×1920×~96 кадрах
+               кодится бесконечно / падает по памяти на телефоне → процесс «зависал» */
+            try{
+              var gf=document.createElement('canvas'),gfw=480;
+              gf.width=gfw;gf.height=Math.round(gfw*(canvas.height/canvas.width));
+              gf.getContext('2d').drawImage(canvas,0,0,gf.width,gf.height);
+              frames.push(gf);
+            }catch(_){}
+          }
           var spent=performance.now()-t0;
           var next=Math.max(0, Math.round(frameMs-(spent%frameMs)));
           setTimeout(tick, next);
@@ -2062,7 +2071,10 @@ function exportVideo(format){
         var delay=Math.round(1000/VIDEO_FPS);
         frames.forEach(function(f){ if(f) try{gif.addFrame(f,{delay:delay});}catch(_){} });
         gif.on('progress',function(p){ setFFStatus('сборка GIF '+Math.round(p*100)+'%'); });
-        gif.on('finished',function(blob){ frames.length=0; prepared.forEach(function(p){p.res.frames.length=0;}); gifResolve({blob:blob,mime:'image/gif'}); });
+        /* watchdog: если gif.js за 120с не отдал (CDN-воркер не дошёл / OOM) — не висим вечно */
+        var gDone=false;
+        var watchdog=setTimeout(function(){ if(gDone)return; gDone=true; try{gif.abort();}catch(_){} gifResolve({blob:null,mime:'image/gif'}); },120000);
+        gif.on('finished',function(blob){ if(gDone)return; gDone=true; clearTimeout(watchdog); frames.length=0; prepared.forEach(function(p){p.res.frames.length=0;}); gifResolve({blob:blob,mime:'image/gif'}); });
         gif.render();
       }
       var gifResolve; var gifDone=new Promise(function(r){gifResolve=r;});
