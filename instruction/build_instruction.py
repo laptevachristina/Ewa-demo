@@ -86,16 +86,16 @@ def slide1():
 
 # ================================================================ S2 УСТАНОВКА
 def slide2():
-    img, d = new(PINK)
+    img, d = new(BLACK)
     card_frame(d, MAGENTA)
-    d.rounded_rectangle([60, 60, 260, 120], radius=30*SS, fill=BLACK)
+    d.rounded_rectangle([60, 60, 260, 120], radius=30*SS, fill=MAGENTA)
     txt(d, (155, 90), "ШАГ 1", font("black", 36), WHITE, anchor="mm")
-    txt(d, (60, 165), "Установка иконки\nна телефон", font("black", 64), BLACK, anchor="la", lsp=6)
+    txt(d, (60, 165), "Установка иконки\nна телефон", font("black", 64), WHITE, anchor="la", lsp=6)
 
     iy = 360
-    d.rounded_rectangle([60, iy, W-60, iy+400], radius=36*SS, fill=WHITE)
+    d.rounded_rectangle([60, iy, W-60, iy+400], radius=36*SS, outline=MAGENTA, width=3*SS)
     icon_phone(d, 150, iy+70, 50, MAGENTA)
-    txt(d, (230, iy+45), "iPhone (Safari)", font("black", 40), BLACK, anchor="la")
+    txt(d, (230, iy+45), "iPhone (Safari)", font("black", 40), WHITE, anchor="la")
     steps_ip = [
         ("1", "Открой сайт в Safari", "адрес сайта"),
         ("2", "Нажми «Поделиться»", "квадрат со стрелкой ↑"),
@@ -104,15 +104,15 @@ def slide2():
     sy = iy + 150
     for num, t1, t2 in steps_ip:
         d.ellipse([90, sy, 90+54, sy+54], fill=MAGENTA)
-        txt(d, (117, sy+27), num, font("black", 30), WHITE, anchor="mm")
-        txt(d, (175, sy+2), t1, font("black", 34), BLACK, anchor="la")
-        txt(d, (175, sy+44), t2, font("semi", 27), GREY, anchor="la")
+        txt(d, (117, sy+27), num, font("black", 30), BLACK, anchor="mm")
+        txt(d, (175, sy+2), t1, font("black", 34), WHITE, anchor="la")
+        txt(d, (175, sy+44), t2, font("semi", 27), PINK, anchor="la")
         sy += 78
 
     ay = iy + 430
-    d.rounded_rectangle([60, ay, W-60, ay+360], radius=36*SS, fill=WHITE)
-    icon_phone(d, 150, ay+70, 50, BLACK)
-    txt(d, (230, ay+45), "Android (Chrome)", font("black", 40), BLACK, anchor="la")
+    d.rounded_rectangle([60, ay, W-60, ay+360], radius=36*SS, outline=PINK, width=3*SS)
+    icon_phone(d, 150, ay+70, 50, WHITE)
+    txt(d, (230, ay+45), "Android (Chrome)", font("black", 40), WHITE, anchor="la")
     steps_ad = [
         ("1", "Открой сайт в Chrome"),
         ("2", "Меню ⋮ справа сверху"),
@@ -120,9 +120,9 @@ def slide2():
     ]
     sy = ay + 150
     for num, t1 in steps_ad:
-        d.ellipse([90, sy, 90+54, sy+54], fill=BLACK)
-        txt(d, (117, sy+27), num, font("black", 30), WHITE, anchor="mm")
-        txt(d, (175, sy+12), t1, font("black", 34), BLACK, anchor="la")
+        d.ellipse([90, sy, 90+54, sy+54], fill=WHITE)
+        txt(d, (117, sy+27), num, font("black", 30), BLACK, anchor="mm")
+        txt(d, (175, sy+12), t1, font("black", 34), WHITE, anchor="la")
         sy += 78
     save(img, "02_установка")
 
@@ -153,27 +153,27 @@ def slide3():
 
 # ================================================================ S4 ОНЛАЙН
 def slide4():
-    img, d = new(PINK)
+    img, d = new(BLACK)
     card_frame(d, MAGENTA)
     d.rounded_rectangle([60, 60, 260, 120], radius=30*SS, fill=MAGENTA)
     txt(d, (155, 90), "ОНЛАЙН", font("black", 34), WHITE, anchor="mm")
-    txt(d, (60, 165), "Нужен интернет", font("black", 68), BLACK, anchor="la")
-    txt(d, (60, 270), "только для двух операций:", font("semi", 32), (90,90,90), anchor="la")
+    txt(d, (60, 165), "Нужен интернет", font("black", 68), WHITE, anchor="la")
+    txt(d, (60, 270), "только для двух операций:", font("semi", 32), PINK, anchor="la")
 
     cy = 380
-    d.rounded_rectangle([60, cy, W-60, cy+340], radius=36*SS, fill=WHITE)
+    d.rounded_rectangle([60, cy, W-60, cy+340], radius=36*SS, outline=MAGENTA, width=3*SS)
     icon_cloud(d, 165, cy+100, 55, MAGENTA)
-    txt(d, (270, cy+40), "Видео MP4", font("black", 42), BLACK, anchor="la")
-    txt(d, (270, cy+98), "MP4 собирается на сервере", font("semi", 30), GREY, anchor="la")
+    txt(d, (270, cy+40), "Видео MP4", font("black", 42), WHITE, anchor="la")
+    txt(d, (270, cy+98), "MP4 собирается на сервере", font("semi", 30), PINK, anchor="la")
     txt(d, (270, cy+138), "→ нужен интернет", font("semi", 28), MAGENTA, anchor="la")
     txt(d, (100, cy+210), "· GIF-экспорт видеослайда — тоже через сервер", font("semi", 27), GREY, anchor="la")
     txt(d, (100, cy+252), "· без интернета видео не сохранится", font("semi", 27), GREY, anchor="la")
 
     cy2 = cy + 380
-    d.rounded_rectangle([60, cy2, W-60, cy2+300], radius=36*SS, fill=WHITE)
+    d.rounded_rectangle([60, cy2, W-60, cy2+300], radius=36*SS, outline=GREEN, width=3*SS)
     icon_check(d, 165, cy2+80, 40, GREEN)
-    txt(d, (270, cy2+30), "Первый видео-экспорт", font("black", 42), BLACK, anchor="la")
-    txt(d, (270, cy2+88), "один раз грузит инструмент (~25 МБ)", font("semi", 30), GREY, anchor="la")
+    txt(d, (270, cy2+30), "Первый видео-экспорт", font("black", 42), WHITE, anchor="la")
+    txt(d, (270, cy2+88), "один раз грузит инструмент (~25 МБ)", font("semi", 30), PINK, anchor="la")
     txt(d, (270, cy2+128), "→ потом кэшируется, далее офлайн", font("semi", 28), GREEN, anchor="la")
     txt(d, (100, cy2+200), "· картинки PNG — всегда офлайн", font("semi", 27), GREY, anchor="la")
     txt(d, (100, cy2+242), "· всё остальное — офлайн", font("semi", 27), GREY, anchor="la")
@@ -181,34 +181,34 @@ def slide4():
 
 # ================================================================ S5 ФОРМАТЫ
 def slide5():
-    img, d = new(PINK)
+    img, d = new(BLACK)
     card_frame(d, MAGENTA)
-    d.rounded_rectangle([60, 60, 330, 120], radius=30*SS, fill=BLACK)
+    d.rounded_rectangle([60, 60, 330, 120], radius=30*SS, fill=MAGENTA)
     txt(d, (195, 90), "ФОРМАТЫ", font("black", 34), WHITE, anchor="mm")
-    txt(d, (60, 165), "Какой файл\nскачать", font("black", 68), BLACK, anchor="la", lsp=6)
-    txt(d, (60, 320), "две кнопки экспорта — под разные задачи", font("semi", 30), (90,90,90), anchor="la")
+    txt(d, (60, 165), "Какой файл\nскачать", font("black", 68), WHITE, anchor="la", lsp=6)
+    txt(d, (60, 320), "две кнопки экспорта — под разные задачи", font("semi", 30), PINK, anchor="la")
 
     # MP4 карточка
     cy = 410
-    d.rounded_rectangle([60, cy, W-60, cy+360], radius=36*SS, fill=WHITE)
+    d.rounded_rectangle([60, cy, W-60, cy+360], radius=36*SS, outline=MAGENTA, width=3*SS)
     d.rounded_rectangle([100, cy+50, 220, cy+170], radius=24*SS, fill=MAGENTA)
     txt(d, (160, cy+110), "MP4", font("black", 52), WHITE, anchor="mm")
-    txt(d, (260, cy+45), "видео со звуком", font("black", 42), BLACK, anchor="la")
-    txt(d, (260, cy+103), "готово сразу — можно публиковать", font("semi", 29), GREY, anchor="la")
+    txt(d, (260, cy+45), "видео со звуком", font("black", 42), WHITE, anchor="la")
+    txt(d, (260, cy+103), "готово сразу — можно публиковать", font("semi", 29), PINK, anchor="la")
     txt(d, (260, cy+143), "→ Инстаграм · Эдитс", font("semi", 28), MAGENTA, anchor="la")
-    txt(d, (100, cy+220), "для постов, сторис, рилс — туда напрямую,", font("semi", 29), (90,90,90), anchor="la")
-    txt(d, (100, cy+262), "без лишней обработки", font("semi", 29), (90,90,90), anchor="la")
+    txt(d, (100, cy+220), "для постов, сторис, рилс — туда напрямую,", font("semi", 29), GREY, anchor="la")
+    txt(d, (100, cy+262), "без лишней обработки", font("semi", 29), GREY, anchor="la")
 
     # GIF карточка
     cy2 = cy + 400
-    d.rounded_rectangle([60, cy2, W-60, cy2+360], radius=36*SS, fill=WHITE)
-    d.rounded_rectangle([100, cy2+50, 220, cy2+170], radius=24*SS, fill=BLACK)
-    txt(d, (160, cy2+110), "GIF", font("black", 52), WHITE, anchor="mm")
-    txt(d, (260, cy2+45), "без звука", font("black", 42), BLACK, anchor="la")
-    txt(d, (260, cy2+103), "заготовка для монтажа", font("semi", 29), GREY, anchor="la")
+    d.rounded_rectangle([60, cy2, W-60, cy2+360], radius=36*SS, outline=PINK, width=3*SS)
+    d.rounded_rectangle([100, cy2+50, 220, cy2+170], radius=24*SS, fill=WHITE)
+    txt(d, (160, cy2+110), "GIF", font("black", 52), BLACK, anchor="mm")
+    txt(d, (260, cy2+45), "без звука", font("black", 42), WHITE, anchor="la")
+    txt(d, (260, cy2+103), "заготовка для монтажа", font("semi", 29), PINK, anchor="la")
     txt(d, (260, cy2+143), "→ CapCut", font("semi", 28), MAGENTA, anchor="la")
-    txt(d, (100, cy2+220), "закидываешь в CapCut и накладываешь", font("semi", 29), (90,90,90), anchor="la")
-    txt(d, (100, cy2+262), "свой звук/музыку сверху", font("semi", 29), (90,90,90), anchor="la")
+    txt(d, (100, cy2+220), "закидываешь в CapCut и накладываешь", font("semi", 29), GREY, anchor="la")
+    txt(d, (100, cy2+262), "свой звук/музыку сверху", font("semi", 29), GREY, anchor="la")
     save(img, "05_форматы")
 
 # ================================================================ S6 ИТОГ

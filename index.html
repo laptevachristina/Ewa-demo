@@ -2086,12 +2086,12 @@ function exportVideo(format){
           rctx.clearRect(0,0,recCanvas.width,recCanvas.height);
           rctx.drawImage(canvas,0,0);
           if(exportFormat==='gif'){
-            /* кадр берём КАЖДЫЙ tick (16 fps) — плавно «как видео». Даунскейл до 480px + дизеринг (убирает banding градиента). */
+            /* кадр берём КАЖДЫЙ tick (16 fps) — плавно «как видео». Даунскейл до 480px. Без дизеринга —
+               рябь убрана; вместо неё точная палитра (quality:1) в assembleGif — картинка чистая. */
             try{
               var gf=document.createElement('canvas'),gfw=480;
               gf.width=gfw;gf.height=Math.round(gfw*(canvas.height/canvas.width));
               gf.getContext('2d').drawImage(canvas,0,0,gf.width,gf.height);
-              ditherCanvas(gf);
               frames.push(gf);
             }catch(_){}
           }
@@ -2105,10 +2105,10 @@ function exportVideo(format){
           if(!ok){gifResolve({blob:null,mime:'image/gif',err:'библиотека не загрузилась (нет сети/CDN заблокирован)'});return;}
           if(!frames.length){gifResolve({blob:null,mime:'image/gif',err:'нет кадров'});return;}
           setFFStatus('сборка GIF… подожди, не закрывай');
-          /* 16 fps без прореживания: кадры собраны каждый tick. quality:3 — точная палитра,
-             workers:4, локальный воркер. Дизеринг уже наложен на кадры → градиенты без banding. */
+          /* 16 fps без прореживания. quality:1 — максимально точная палитра (без ряби дизеринга),
+             workers:4, локальный воркер. Длительность ≤4с → сборка уложится. */
           var GW=frames[0].width,GH=frames[0].height;
-          var gif=new GIF({workers:4,quality:3,width:GW,height:GH,workerScript:GIF_WORKER_URL});
+          var gif=new GIF({workers:4,quality:1,width:GW,height:GH,workerScript:GIF_WORKER_URL});
           var delay=Math.round(1000/VIDEO_FPS); /* 16 fps воспроизведения */
           frames.forEach(function(f){ if(f) try{gif.addFrame(f,{delay:delay});}catch(_){} });
           gif.on('progress',function(p){ setFFStatus('сборка GIF '+Math.round(p*100)+'%'); });
