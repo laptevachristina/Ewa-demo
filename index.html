@@ -2085,7 +2085,7 @@ function exportVideo(format){
             /* кадр берём КАЖДЫЙ tick (16 fps) — плавно «как видео». Даунскейл до 480px. Без дизеринга —
                рябь убрана; вместо неё точная палитра (quality:1) в assembleGif — картинка чистая. */
             try{
-              var gf=document.createElement('canvas'),gfw=480;
+              var gf=document.createElement('canvas'),gfw=640;
               gf.width=gfw;gf.height=Math.round(gfw*(canvas.height/canvas.width));
               gf.getContext('2d').drawImage(canvas,0,0,gf.width,gf.height);
               frames.push(gf);
@@ -2109,6 +2109,9 @@ function exportVideo(format){
             var delay=Math.round(1000/VIDEO_FPS); /* 16 fps воспроизведения */
             var off=document.createElement('canvas');off.width=FW;off.height=FH;
             var octx=off.getContext('2d',{willReadFrequently:true});
+            /* лёгкий ordered dithering (Bayer 4×4, слабая amplitude) — убирает полосы на градиентах,
+               зерна почти не видно. Применяем к RGBA кадру перед quantize. */
+            var BAY=[0,8,2,10, 12,4,14,6, 3,11,1,9, 15,7,13,5], AMP=2.2;
             function yieldFrame(){return new Promise(function(r){setTimeout(r,0);});}
             var gDone=false;
             var watchdog=setTimeout(function(){gDone=true;gifResolve({blob:null,mime:'image/gif',err:'превышено время (180с)'});},180000);
@@ -2116,7 +2119,9 @@ function exportVideo(format){
               for(var i=0;i<frames.length;i++){
                 if(gDone)return;
                 octx.clearRect(0,0,FW,FH);octx.drawImage(frames[i],0,0,FW,FH);
-                var data=octx.getImageData(0,0,FW,FH).data;
+                var img=octx.getImageData(0,0,FW,FH);
+                var data=img.data;
+                for(var y=0;y<FH;y++){var row=(y&3)*4;for(var x=0;x<FW;x++){var idx=(y*FW+x)*4;var t=(BAY[row+(x&3)]-7.5)*AMP;data[idx]+=t;data[idx+1]+=t;data[idx+2]+=t;}}
                 var palette=G.quantize(data,256,{format:'rgb565'});     /* per-frame палитра */
                 var index=G.applyPalette(data,palette,'rgb565');
                 gif.writeFrame(index,FW,FH,{palette:palette,delay:delay});
