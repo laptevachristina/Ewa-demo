@@ -2076,7 +2076,7 @@ function exportVideo(format){
             if(elapsed-lastGifMs>=2*frameMs-2){
               lastGifMs=elapsed;
               try{
-                var gf=document.createElement('canvas'),gfw=400;
+                var gf=document.createElement('canvas'),gfw=480;
                 gf.width=gfw;gf.height=Math.round(gfw*(canvas.height/canvas.width));
                 gf.getContext('2d').drawImage(canvas,0,0,gf.width,gf.height);
                 frames.push(gf);
@@ -2093,13 +2093,14 @@ function exportVideo(format){
           if(!ok){gifResolve({blob:null,mime:'image/gif',err:'библиотека не загрузилась (нет сети/CDN заблокирован)'});return;}
           if(!frames.length){gifResolve({blob:null,mime:'image/gif',err:'нет кадров'});return;}
           setFFStatus('сборка GIF… подожди, не закрывай');
-          /* ускорение: берём каждый N-й кадр → ~16 кадров максимум (gif.js тормозит на кол-ве кадров). */
-          var stride=Math.max(1,Math.ceil(frames.length/16));
+          /* ~24 кадра — плавность; локальный воркер + 4 потока держат скорость */
+          var stride=Math.max(1,Math.ceil(frames.length/24));
           var sub=[];
           for(var i=0;i<frames.length;i+=stride){ if(frames[i])sub.push(frames[i]); }
           if(!sub.length)sub=[frames[0]];
           var GW=sub[0].width,GH=sub[0].height;
-          var gif=new GIF({workers:4,quality:40,width:GW,height:GH,workerScript:GIF_WORKER_URL});
+          /* quality:10 — максимум цветов (убирает «пиксели-градиент»/banding), было 40 */
+          var gif=new GIF({workers:4,quality:10,width:GW,height:GH,workerScript:GIF_WORKER_URL});
           var delay=Math.round(2*1000/VIDEO_FPS*stride); /* компенсируем stride — скорость воспроизведения та же */
           sub.forEach(function(f){ if(f) try{gif.addFrame(f,{delay:delay});}catch(_){} });
           gif.on('progress',function(p){ setFFStatus('сборка GIF '+Math.round(p*100)+'%'); });
