@@ -148,7 +148,7 @@ em{font-style:italic}
 .mini .sticker .mv-handle,.mini .sticker .mv-del,.mini .sticker .tx-resize,.mini .sticker .rot-handle{display:none!important}
 
 .vidclip{position:absolute;touch-action:none;cursor:move}
-.vidclip video{width:100%;height:100%;object-fit:contain;background:#000;pointer-events:none;display:block}
+.vidclip video{width:100%;height:100%;object-fit:contain;background:#000;pointer-events:none;display:block;border-radius:8%}
 .vidclip .mv-handle,.vidclip .mv-del,.vidclip .tx-resize,.vidclip .layer-toggle{display:none}
 .vidclip.sel{outline:2px dashed var(--sage);outline-offset:6px}
 .vidclip.sel .mv-handle,.vidclip.sel .mv-del,.vidclip.sel .tx-resize,.vidclip.sel .layer-toggle{display:block}
@@ -1737,6 +1737,7 @@ function renderSlideCanvas(el,animState,videoFrameMap,forceES){
         }
         function drawVid(rec){
           ctx.save();
+          roundRectPath(ctx,rec.x,rec.y,rec.W,rec.H,rec.W*0.08);ctx.clip(); /* авто-скругление углов клипа — как border-radius:8% в превью */
           ctx.fillStyle='#000';ctx.fillRect(rec.x,rec.y,rec.W,rec.H);
           var scale=Math.min(rec.W/rec.vw,rec.H/rec.vh);
           var dw=rec.vw*scale,dh=rec.vh*scale,dx=rec.x+(rec.W-dw)/2,dy=rec.y+(rec.H-dh)/2;
