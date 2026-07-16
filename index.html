@@ -400,6 +400,25 @@ header .logo b{color:var(--ui-acc);font-weight:700}
 <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
 <!-- gif.js — сборка GIF из предрендеренных кадров (для CapCut; без звука) -->
 <script src="https://unpkg.com/gif.js@0.2.0/dist/gif.js"></script>
+<script>
+/* fallback загрузка gif.js + воркера: unpkg часто блокируется на телефонах/в регионах —
+   пробуем jsdelivr, затем cdnjs. ensureGifLib() проверяет и при необходимости догружает. */
+var GIF_LIB_URLS=['https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.js','https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js'];
+var GIF_WORKER_URL='https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js';
+function ensureGifLib(){
+  return new Promise(function(resolve){
+    if(window.GIF){resolve(true);return;}
+    function tryLoad(i){
+      if(i>=GIF_LIB_URLS.length){resolve(false);return;}
+      var s=document.createElement('script');s.src=GIF_LIB_URLS[i];
+      s.onload=function(){if(window.GIF)resolve(true);else tryLoad(i+1);};
+      s.onerror=function(){tryLoad(i+1);};
+      document.head.appendChild(s);
+    }
+    tryLoad(0);
+  });
+}
+</script>
 
 <script>
 var BIRD_SVG="<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 130 100\" role=\"img\" aria-label=\"EWA PRODUCT\"><g fill=\"#0A0A0A\"><rect x=\"4\" y=\"20\" width=\"30\" height=\"9\" rx=\"2\"/><rect x=\"4\" y=\"40\" width=\"30\" height=\"9\" rx=\"2\"/><path d=\"M42 62 Q50 34 58 62 Q66 90 74 62\" fill=\"none\" stroke=\"#0A0A0A\" stroke-width=\"9\" stroke-linecap=\"round\"/><polygon points=\"92,66 108,30 124,66\"/></g></svg>";
@@ -2065,18 +2084,21 @@ function exportVideo(format){
         }, function(){ setTimeout(tick,frameMs); });
       })();
       function assembleGif(frames){
-        if(!window.GIF||!frames.length){gifResolve({blob:null,mime:'image/gif'});return;}
-        setFFStatus('сборка GIF…');
-        var GW=frames[0].width,GH=frames[0].height;
-        var gif=new GIF({workers:2,quality:12,width:GW,height:GH,workerScript:'https://unpkg.com/gif.js@0.2.0/dist/gif.worker.js'});
-        var delay=Math.round(1000/VIDEO_FPS);
-        frames.forEach(function(f){ if(f) try{gif.addFrame(f,{delay:delay});}catch(_){} });
-        gif.on('progress',function(p){ setFFStatus('сборка GIF '+Math.round(p*100)+'%'); });
-        /* watchdog: если gif.js за 120с не отдал (CDN-воркер не дошёл / OOM) — не висим вечно */
-        var gDone=false;
-        var watchdog=setTimeout(function(){ if(gDone)return; gDone=true; try{gif.abort();}catch(_){} gifResolve({blob:null,mime:'image/gif'}); },120000);
-        gif.on('finished',function(blob){ if(gDone)return; gDone=true; clearTimeout(watchdog); frames.length=0; prepared.forEach(function(p){p.res.frames.length=0;}); gifResolve({blob:blob,mime:'image/gif'}); });
-        gif.render();
+        ensureGifLib().then(function(ok){
+          if(!ok){gifResolve({blob:null,mime:'image/gif',err:'библиотека не загрузилась (нет сети/CDN заблокирован)'});return;}
+          if(!frames.length){gifResolve({blob:null,mime:'image/gif',err:'нет кадров'});return;}
+          setFFStatus('сборка GIF…');
+          var GW=frames[0].width,GH=frames[0].height;
+          var gif=new GIF({workers:2,quality:12,width:GW,height:GH,workerScript:GIF_WORKER_URL});
+          var delay=Math.round(1000/VIDEO_FPS);
+          frames.forEach(function(f){ if(f) try{gif.addFrame(f,{delay:delay});}catch(_){} });
+          gif.on('progress',function(p){ setFFStatus('сборка GIF '+Math.round(p*100)+'%'); });
+          /* watchdog: если gif.js за 60с не отдал (CDN-воркер не дошёл / OOM) — не висим вечно */
+          var gDone=false;
+          var watchdog=setTimeout(function(){ if(gDone)return; gDone=true; try{gif.abort();}catch(_){} gifResolve({blob:null,mime:'image/gif',err:'превышено время (60с)'}); },60000);
+          gif.on('finished',function(blob){ if(gDone)return; gDone=true; clearTimeout(watchdog); frames.length=0; prepared.forEach(function(p){p.res.frames.length=0;}); gifResolve({blob:blob,mime:'image/gif'}); });
+          gif.render();
+        });
       }
       var gifResolve; var gifDone=new Promise(function(r){gifResolve=r;});
       if(exportFormat==='gif'){ return gifDone; }
@@ -2087,7 +2109,7 @@ function exportVideo(format){
       });
     });
   }).then(function(res){
-    if(!res||!res.blob){ hideFFStatus(); videoExportBusy=false;btn.disabled=false;btn.textContent=oldText; alert('GIF не собрался — попробуй MP4, или напиши мне.'); return; }
+    if(!res||!res.blob){ hideFFStatus(); videoExportBusy=false;btn.disabled=false;btn.textContent=oldText; alert('GIF не собрался'+(res&&res.err?(': '+res.err):'')+' — попробуй MP4, или напиши мне.'); return; }
     /* GIF не требует ffmpeg — отдаём сразу */
     if(res.mime==='image/gif'){ hideFFStatus(); videoExportBusy=false;btn.disabled=false;btn.textContent=oldText; openVideoModal(res.blob,res.mime); return; }
     /* статус показываем отдельной плашкой сверху — кнопка-иконка узкая, текст в неё не влезает */
