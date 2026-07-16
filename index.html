@@ -2049,6 +2049,7 @@ function exportVideo(format){
       })).then(function(prepared){
       var frameMs=1000/VIDEO_FPS;
       var frames=[];
+      var lastGifMs=-1e9; /* троттлинг кадров для GIF (~8 fps) */
       _recording=true;_ovCache=new Map(); /* кеш overlay — иначе SVG-decode каждый кадр вешает айфон */
       if(exportFormat!=='gif'){ recorder.start(); } /* в GIF-режиме MediaRecorder не нужен — он мешает воркерам gif.js */
       setFFStatus(exportFormat==='gif'?'запись GIF…':'запись…');
@@ -2069,14 +2070,18 @@ function exportVideo(format){
           rctx.clearRect(0,0,recCanvas.width,recCanvas.height);
           rctx.drawImage(canvas,0,0);
           if(exportFormat==='gif'){
-            /* даунскейл кадра до 480px по ширине: gif.js на полноразмерных 1080×1920×~96 кадрах
-               кодится бесконечно / падает по памяти на телефоне → процесс «зависал» */
-            try{
-              var gf=document.createElement('canvas'),gfw=480;
-              gf.width=gfw;gf.height=Math.round(gfw*(canvas.height/canvas.width));
-              gf.getContext('2d').drawImage(canvas,0,0,gf.width,gf.height);
-              frames.push(gf);
-            }catch(_){}
+            /* кадр берём РЕЖЕ — раз в 2*frameMs (~8 fps вместо 16): для текста/стикеров плавности
+               хватает, а кадров вдвое меньше → gif.js не кодится дольше минуты (было «превышено время»).
+               Даунскейл до 400px по ширине (было 480). */
+            if(elapsed-lastGifMs>=2*frameMs-2){
+              lastGifMs=elapsed;
+              try{
+                var gf=document.createElement('canvas'),gfw=400;
+                gf.width=gfw;gf.height=Math.round(gfw*(canvas.height/canvas.width));
+                gf.getContext('2d').drawImage(canvas,0,0,gf.width,gf.height);
+                frames.push(gf);
+              }catch(_){}
+            }
           }
           var spent=performance.now()-t0;
           var next=Math.max(0, Math.round(frameMs-(spent%frameMs)));
@@ -2089,13 +2094,13 @@ function exportVideo(format){
           if(!frames.length){gifResolve({blob:null,mime:'image/gif',err:'нет кадров'});return;}
           setFFStatus('сборка GIF…');
           var GW=frames[0].width,GH=frames[0].height;
-          var gif=new GIF({workers:2,quality:12,width:GW,height:GH,workerScript:GIF_WORKER_URL});
-          var delay=Math.round(1000/VIDEO_FPS);
+          var gif=new GIF({workers:2,quality:20,width:GW,height:GH,workerScript:GIF_WORKER_URL});
+          var delay=Math.round(2*1000/VIDEO_FPS); /* ~125мс = 8 fps (кадры троттлятся в tick) */
           frames.forEach(function(f){ if(f) try{gif.addFrame(f,{delay:delay});}catch(_){} });
           gif.on('progress',function(p){ setFFStatus('сборка GIF '+Math.round(p*100)+'%'); });
-          /* watchdog: если gif.js за 60с не отдал (CDN-воркер не дошёл / OOM) — не висим вечно */
+          /* watchdog 180с: на слабом телефоне сборка долгая, но кадры прорежены — уложится */
           var gDone=false;
-          var watchdog=setTimeout(function(){ if(gDone)return; gDone=true; try{gif.abort();}catch(_){} gifResolve({blob:null,mime:'image/gif',err:'превышено время (60с)'}); },60000);
+          var watchdog=setTimeout(function(){ if(gDone)return; gDone=true; try{gif.abort();}catch(_){} gifResolve({blob:null,mime:'image/gif',err:'превышено время (180с)'}); },180000);
           gif.on('finished',function(blob){ if(gDone)return; gDone=true; clearTimeout(watchdog); frames.length=0; prepared.forEach(function(p){p.res.frames.length=0;}); gifResolve({blob:blob,mime:'image/gif'}); });
           gif.render();
         });
