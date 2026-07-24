@@ -410,7 +410,7 @@ var BIRD_SVG="<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 130 100\" 
   if(!first||first>now){first=now;try{localStorage.setItem(KEY,String(first));}catch(e){}}
   var expired=((now-first)>DEMO_DAYS*86400000);
   if(expired){
-    document.documentElement.innerHTML='<body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0A0A0A;color:#fff;font-family:Arial,sans-serif;text-align:center;padding:40px"><div><div style="font-size:54px;font-weight:900;color:#D6127F;letter-spacing:2px;margin-bottom:18px">EWA</div><h1 style="font-size:22px;margin:0 0 12px;color:#fff">Демо-период завершён</h1><p style="color:#F5C4E0;line-height:1.6;font-size:16px;margin:0">Чтобы получить полную версию — напиши мне.</p></div></body>';
+    document.documentElement.innerHTML='<body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0A0A0A;color:#fff;font-family:Arial,sans-serif;text-align:center;padding:40px"><div><div style="font-size:54px;font-weight:900;color:#D6127F;letter-spacing:2px;margin-bottom:18px">EWA</div><h1 style="font-size:22px;margin:0 0 12px;color:#fff">Срок демо-версии подошёл к концу</h1><p style="color:#F5C4E0;line-height:1.6;font-size:16px;margin:0">За персональной версией обратитесь в <b style="color:#fff">STRK DESIGN</b></p></div></body>';
     throw new Error('demo-expired');
   }
 })();
